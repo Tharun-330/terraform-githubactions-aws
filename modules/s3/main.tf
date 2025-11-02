@@ -1,6 +1,6 @@
 # S3 Bucket for Terraform State
 resource "aws_s3_bucket" "tf_state" {
-  bucket = "my-terraform-state-github-bucket"
+  bucket = "state-github-bucket-karnati"
   force_destroy = false
 
   tags = {
