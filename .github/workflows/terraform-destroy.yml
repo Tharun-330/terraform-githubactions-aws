@@ -66,11 +66,12 @@ jobs:
       - name: Wait for Manual Approval
         uses: trstringer/manual-approval@v1
         with:
-          secret: ${{ secrets.GITHUB_TOKEN }}
+          secret: ${{ secrets.GH_PAT }}
           approvers: Tharun-330
           minimum-approvals: 1
           issue-title: "Manual approval for Terraform Destroy in ${{ github.event.inputs.environment }}"
           issue-body: "Approve this issue to proceed with **terraform destroy** for ${{ github.event.inputs.environment }} environment."
+      
 
       # -----------------------------
       # Terraform Destroy
