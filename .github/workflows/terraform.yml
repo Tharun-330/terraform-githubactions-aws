@@ -1,0 +1,82 @@
+name: Terraform EC2 Deployment (OIDC Auth)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Select environment to deploy (dev/qa/prod)"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - qa
+          - prod
+
+permissions:
+  contents: read
+  id-token: write   # REQUIRED for OIDC!
+
+jobs:
+  terraform:
+    name: "Terraform Plan and Apply"
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # -----------------------------
+      # OIDC-based AWS Authentication
+      # -----------------------------
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::132514887880:role/github-oidc-role
+          aws-region: ap-south-1
+
+      # -----------------------------
+      # Terraform Setup
+      # -----------------------------
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      - name: Terraform Init
+        working-directory: ./envs/${{ github.event.inputs.environment }}
+        run: terraform init -input=false
+
+      - name: Terraform Fmt Check
+        working-directory: ./envs/${{ github.event.inputs.environment }}
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Validate
+        working-directory: ./envs/${{ github.event.inputs.environment }}
+        run: terraform validate
+
+      - name: Terraform Plan
+        working-directory: ./envs/${{ github.event.inputs.environment }}
+        run: terraform plan -input=false -out=tfplan
+
+      # -----------------------------
+      # Manual Approval (for prod)
+      # -----------------------------
+      - name: Wait for Manual Approval (prod only)
+        if: github.event.inputs.environment == 'prod'
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ secrets.GITHUB_TOKEN }}
+          approvers: tharunkarnati
+          minimum-approvals: 1
+          issue-title: "Manual approval for Terraform Apply in PROD"
+          issue-body: "Approve this issue to proceed with Terraform apply in PROD."
+
+      # -----------------------------
+      # Terraform Apply
+      # -----------------------------
+      - name: Terraform Apply
+        if: success()
+        working-directory: ./envs/${{ github.event.inputs.environment }}
+        run: terraform apply -auto-approve tfplan

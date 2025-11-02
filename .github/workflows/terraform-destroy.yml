@@ -1,0 +1,81 @@
+name: Terraform Destroy (OIDC Auth)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Select environment to destroy (dev/qa/prod)"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - qa
+          - prod
+
+permissions:
+  contents: read
+  id-token: write   # REQUIRED for OIDC!
+
+jobs:
+  terraform-destroy:
+    name: "Terraform Destroy - ${{ github.event.inputs.environment }}"
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # -----------------------------
+      # OIDC-based AWS Authentication
+      # -----------------------------
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::132514887880:role/github-oidc-role
+          aws-region: ap-south-1
+
+      # -----------------------------
+      # Terraform Setup
+      # -----------------------------
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      - name: Terraform Init
+        working-directory: ./envs/${{ github.event.inputs.environment }}
+        run: terraform init -input=false
+
+      - name: Terraform Fmt Check
+        working-directory: ./envs/${{ github.event.inputs.environment }}
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Validate
+        working-directory: ./envs/${{ github.event.inputs.environment }}
+        run: terraform validate
+
+      - name: Terraform Plan Destroy
+        working-directory: ./envs/${{ github.event.inputs.environment }}
+        run: terraform plan -destroy -out=tfplan-destroy
+
+      # -----------------------------
+      # Manual Approval (ALWAYS Required)
+      # -----------------------------
+      - name: Wait for Manual Approval
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ secrets.GITHUB_TOKEN }}
+          approvers: tharunkarnati
+          minimum-approvals: 1
+          issue-title: "Manual approval for Terraform Destroy in ${{ github.event.inputs.environment }}"
+          issue-body: "Approve this issue to proceed with **terraform destroy** for ${{ github.event.inputs.environment }} environment."
+
+      # -----------------------------
+      # Terraform Destroy
+      # -----------------------------
+      - name: Terraform Destroy
+        if: success()
+        working-directory: ./envs/${{ github.event.inputs.environment }}
+        run: terraform destroy -auto-approve
