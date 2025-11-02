@@ -1,10 +1,10 @@
 # S3 Bucket for Terraform State
 resource "aws_s3_bucket" "tf_state" {
-  bucket = "my-terraform-state-bucket"
+  bucket = "my-terraform-state-github-bucket"
   force_destroy = false
 
   tags = {
-    Name        = "terraform-state-bucket"
+    Name        = "terraform-state-github-bucket"
     Environment = "global"
   }
 }
